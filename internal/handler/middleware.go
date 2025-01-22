@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"log"
 	"strings"
 
 	"github.com/ArdiSasongko/EwalletProjects-transaction/internal/external"
