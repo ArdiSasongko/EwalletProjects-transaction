@@ -17,6 +17,7 @@ type Handlers struct {
 	}
 	Transaction interface {
 		Create(*fiber.Ctx) error
+		Update(ctx *fiber.Ctx) error
 	}
 }
 
