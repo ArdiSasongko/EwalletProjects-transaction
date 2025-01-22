@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package token;
+
+option go_package = "github.com/ArdiSasongko/EwalletProjects-user/internal/proto/token";
+service TokenService {
+    rpc Validate (TokenRequest) returns (TokenResponse);
+}
+
+message TokenRequest {
+    string token = 1;
+}
+
+message TokenResponse {
+    string message = 1;
+    UserData data = 2;
+}
+
+message UserData {
+    int32 id = 1;
+}
