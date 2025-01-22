@@ -41,6 +41,7 @@ func (h *MiddlewareHandler) AuthMiddleware() fiber.Handler {
 		log.Println(userID)
 
 		ctx.Locals("token", userID)
+		ctx.Locals("valid", token)
 		return ctx.Next()
 	}
 }

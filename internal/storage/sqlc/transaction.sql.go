@@ -46,3 +46,45 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 	err := row.Scan(&i.Reference, &i.TransactionStatus)
 	return i, err
 }
+
+const getTransactionByReference = `-- name: GetTransactionByReference :one
+SELECT id, user_id, amount, transaction_type, transaction_status, reference, description, additional_info, created_at, updated_at
+FROM transaction WHERE reference = $1
+`
+
+func (q *Queries) GetTransactionByReference(ctx context.Context, reference string) (Transaction, error) {
+	row := q.db.QueryRow(ctx, getTransactionByReference, reference)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Amount,
+		&i.TransactionType,
+		&i.TransactionStatus,
+		&i.Reference,
+		&i.Description,
+		&i.AdditionalInfo,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateTransactionStatusByReference = `-- name: UpdateTransactionStatusByReference :one
+UPDATE transaction SET transaction_status = $2, additional_info = $3, updated_at = CURRENT_TIMESTAMP
+WHERE reference = $1
+RETURNING transaction_status
+`
+
+type UpdateTransactionStatusByReferenceParams struct {
+	Reference         string
+	TransactionStatus TransactionStatus
+	AdditionalInfo    pgtype.Text
+}
+
+func (q *Queries) UpdateTransactionStatusByReference(ctx context.Context, arg UpdateTransactionStatusByReferenceParams) (TransactionStatus, error) {
+	row := q.db.QueryRow(ctx, updateTransactionStatusByReference, arg.Reference, arg.TransactionStatus, arg.AdditionalInfo)
+	var transaction_status TransactionStatus
+	err := row.Scan(&transaction_status)
+	return transaction_status, err
+}

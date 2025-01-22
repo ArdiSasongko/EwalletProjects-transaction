@@ -41,6 +41,7 @@ func (app *application) mount() *fiber.App {
 	v1 := r.Group("/v1")
 	transactionRoute := v1.Group("/transaction")
 	transactionRoute.Post("/", app.handler.Middleware.AuthMiddleware(), app.handler.Transaction.Create)
+	transactionRoute.Put("/:reference", app.handler.Middleware.AuthMiddleware(), app.handler.Transaction.Update)
 
 	return r
 }

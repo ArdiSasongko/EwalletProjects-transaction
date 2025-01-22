@@ -1,6 +1,10 @@
 package model
 
-import "github.com/go-playground/validator/v10"
+import (
+	"time"
+
+	"github.com/go-playground/validator/v10"
+)
 
 var Validate *validator.Validate
 
@@ -9,13 +13,32 @@ func init() {
 }
 
 type TransactionPayload struct {
-	UserID          int32  `json:"user_id"`
-	Amount          int32  `json:"amount" validate:"required,numeric,gte=1000"`
-	TransactionType string `json:"transaction_type" validate:"required"`
-	Description     string `json:"description" validate:"required,min=5,max=255"`
-	AdditionalInfo  string `json:"additional_info" validate:"omitempty"`
+	UserID          int32   `json:"user_id"`
+	Amount          float64 `json:"amount" validate:"required,numeric,gte=1000"`
+	TransactionType string  `json:"transaction_type" validate:"required"`
+	Description     string  `json:"description" validate:"required,min=5,max=255"`
+	AdditionalInfo  string  `json:"additional_info" validate:"omitempty"`
 }
 
 func (u *TransactionPayload) Validate() error {
 	return Validate.Struct(u)
+}
+
+type TransactionUpdatePayload struct {
+	Reference         string `json:"reference"`
+	TransactionStatus string `json:"transaction_status" validate:"required"`
+	AdditionalInfo    string `json:"additional_info"`
+	Token             string
+}
+
+func (u *TransactionUpdatePayload) Validate() error {
+	return Validate.Struct(u)
+}
+
+type TransactionResponse struct {
+	WalletID  int32     `json:"wallet_id"`
+	Reference string    `json:"reference"`
+	Amount    float64   `json:"amount"`
+	CreatedAt time.Time `json:"created_at"`
+	Status    string    `json:"status"`
 }
