@@ -38,7 +38,9 @@ func (app *application) mount() *fiber.App {
 
 	r.Get("/health", app.handler.Health.CheckHealth)
 
-	//v1 := r.Group("/v1")
+	v1 := r.Group("/v1")
+	transactionRoute := v1.Group("/transaction")
+	transactionRoute.Post("/", app.handler.Middleware.AuthMiddleware(), app.handler.Transaction.Create)
 
 	return r
 }
