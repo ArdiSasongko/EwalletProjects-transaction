@@ -70,6 +70,82 @@ func (q *Queries) GetTransactionByReference(ctx context.Context, reference strin
 	return i, err
 }
 
+const getTransactionByReferenceAndUserId = `-- name: GetTransactionByReferenceAndUserId :one
+SELECT id, user_id, amount, transaction_type, transaction_status, reference, description, additional_info, created_at, updated_at
+FROM transaction 
+WHERE reference = $1 AND user_id = $2
+`
+
+type GetTransactionByReferenceAndUserIdParams struct {
+	Reference string
+	UserID    int32
+}
+
+func (q *Queries) GetTransactionByReferenceAndUserId(ctx context.Context, arg GetTransactionByReferenceAndUserIdParams) (Transaction, error) {
+	row := q.db.QueryRow(ctx, getTransactionByReferenceAndUserId, arg.Reference, arg.UserID)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Amount,
+		&i.TransactionType,
+		&i.TransactionStatus,
+		&i.Reference,
+		&i.Description,
+		&i.AdditionalInfo,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTransactions = `-- name: GetTransactions :many
+SELECT reference, transaction_status, amount, transaction_type, created_at
+FROM transaction WHERE user_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type GetTransactionsParams struct {
+	UserID int32
+	Limit  int32
+	Offset int32
+}
+
+type GetTransactionsRow struct {
+	Reference         string
+	TransactionStatus TransactionStatus
+	Amount            pgtype.Numeric
+	TransactionType   TransactionType
+	CreatedAt         pgtype.Timestamp
+}
+
+func (q *Queries) GetTransactions(ctx context.Context, arg GetTransactionsParams) ([]GetTransactionsRow, error) {
+	rows, err := q.db.Query(ctx, getTransactions, arg.UserID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTransactionsRow
+	for rows.Next() {
+		var i GetTransactionsRow
+		if err := rows.Scan(
+			&i.Reference,
+			&i.TransactionStatus,
+			&i.Amount,
+			&i.TransactionType,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateTransactionStatusByReference = `-- name: UpdateTransactionStatusByReference :one
 UPDATE transaction SET transaction_status = $2, additional_info = $3, updated_at = CURRENT_TIMESTAMP
 WHERE reference = $1

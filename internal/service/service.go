@@ -13,6 +13,9 @@ type Service struct {
 	Transaction interface {
 		Create(context.Context, *model.TransactionPayload) (sqlc.CreateTransactionRow, error)
 		UpdateTransaction(context.Context, *model.TransactionUpdatePayload) (model.TransactionResponse, error)
+		GetTransasction(context.Context, *model.GetTransaction) (sqlc.Transaction, error)
+		GetTransactions(context.Context, *model.GetTransactions) ([]sqlc.GetTransactionsRow, error)
+		CreateRefund(context.Context, *model.TransactionRefundPayload) (*model.RefundResponse, error)
 	}
 }
 

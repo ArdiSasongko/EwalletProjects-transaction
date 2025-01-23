@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/big"
+	"log"
+	"math"
 	"time"
 
 	"github.com/ArdiSasongko/EwalletProjects-transaction/internal/external"
@@ -46,24 +47,34 @@ type TransactionService struct {
 	w  external.Wallet
 }
 
+func roundToTwoDecimalPlaces(amount float64) float64 {
+	return math.Round(amount*100) / 100
+}
+
 func (s *TransactionService) Create(ctx context.Context, payload *model.TransactionPayload) (sqlc.CreateTransactionRow, error) {
 	if !transType[payload.TransactionType] {
 		return sqlc.CreateTransactionRow{}, fmt.Errorf("transaction type not allowed only 'TOPUP', 'PURCHASE', 'REFUND'")
 	}
 
-	if payload.AdditionalInfo == "" {
-		payload.AdditionalInfo = " "
+	jsonAditionalInfo := map[string]interface{}{}
+	if payload.AdditionalInfo != "" {
+		err := json.Unmarshal([]byte(payload.AdditionalInfo), &jsonAditionalInfo)
+		if err != nil {
+			return sqlc.CreateTransactionRow{}, fmt.Errorf("additional info invalid format")
+		}
 	}
-
 	reference := generateReference(payload.TransactionType, payload.UserID)
 
-	amountBigInt := big.NewInt(int64(payload.Amount))
+	amountFloat := roundToTwoDecimalPlaces(payload.Amount)
+	amountStr := fmt.Sprintf("%.2f", amountFloat)
+	amountNumeric := pgtype.Numeric{}
+	if err := amountNumeric.Scan(amountStr); err != nil {
+		return sqlc.CreateTransactionRow{}, err
+	}
+
 	resp, err := s.q.CreateTransaction(ctx, sqlc.CreateTransactionParams{
-		UserID: payload.UserID,
-		Amount: pgtype.Numeric{
-			Int:   amountBigInt,
-			Valid: true,
-		},
+		UserID:            payload.UserID,
+		Amount:            amountNumeric,
 		TransactionType:   sqlc.TransactionType(payload.TransactionType),
 		TransactionStatus: StatusPending,
 		Description: pgtype.Text{
@@ -156,6 +167,16 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, payload *mod
 		return model.TransactionResponse{}, err
 	}
 
+	if payload.TransactionStatus == StatusFailed {
+		if err := tx.Commit(ctx); err != nil {
+			return model.TransactionResponse{}, fmt.Errorf("failed to process transaction")
+		}
+		return model.TransactionResponse{
+			Reference: payload.Reference,
+			Status:    payload.TransactionStatus,
+		}, nil
+	}
+
 	amountFloat, _ := tsx.Amount.Float64Value()
 
 	updatePayload := external.WalletRequest{
@@ -197,4 +218,115 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, payload *mod
 
 	respTrans.Status = string(resp)
 	return respTrans, nil
+}
+
+func (s *TransactionService) GetTransactions(ctx context.Context, payload *model.GetTransactions) ([]sqlc.GetTransactionsRow, error) {
+	pageSize := payload.Limit
+	pageNumber := payload.Offset
+
+	limit := pageSize
+	offset := (pageNumber - 1) * pageSize
+
+	resp, err := s.q.GetTransactions(ctx, sqlc.GetTransactionsParams{
+		UserID: payload.UserID,
+		Limit:  limit,
+		Offset: offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func (s *TransactionService) GetTransasction(ctx context.Context, payload *model.GetTransaction) (sqlc.Transaction, error) {
+	resp, err := s.q.GetTransactionByReferenceAndUserId(ctx, sqlc.GetTransactionByReferenceAndUserIdParams{
+		UserID:    payload.UserID,
+		Reference: payload.Reference,
+	})
+
+	if err != nil {
+		return sqlc.Transaction{}, err
+	}
+
+	return resp, nil
+}
+
+func (s *TransactionService) CreateRefund(ctx context.Context, payload *model.TransactionRefundPayload) (*model.RefundResponse, error) {
+	// using transaction for consistent
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.q.WithTx(tx)
+	// get transaction
+	tsx, err := qtx.GetTransactionByReference(ctx, payload.Reference)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Println(tsx.TransactionType)
+	log.Println(tsx.TransactionStatus)
+	// check type and status
+	if tsx.TransactionType != sqlc.TransactionTypePURCHASE || tsx.TransactionStatus != StatusSuccess {
+		return nil, fmt.Errorf("only type 'PURCHASE' and status 'SUCCESS' can be refunded")
+	}
+
+	jsonAditionalInfo := map[string]interface{}{}
+	if payload.AdditionalInfo != "" {
+		err := json.Unmarshal([]byte(payload.AdditionalInfo), &jsonAditionalInfo)
+		if err != nil {
+			return nil, fmt.Errorf("additional info invalid format")
+		}
+	}
+	// generate new reference
+	ref := generateReference(string(sqlc.TransactionTypeREFUND), tsx.UserID)
+	// create model for createtransaction
+	tsxReq := sqlc.CreateTransactionParams{
+		UserID:            tsx.UserID,
+		Amount:            tsx.Amount,
+		TransactionType:   sqlc.TransactionTypeREFUND,
+		TransactionStatus: sqlc.TransactionStatusSUCCESS,
+		Reference:         ref,
+		Description: pgtype.Text{
+			String: payload.Description,
+			Valid:  true,
+		},
+		AdditionalInfo: pgtype.Text{
+			String: payload.AdditionalInfo,
+			Valid:  true,
+		},
+	}
+
+	resp, err := qtx.CreateTransaction(ctx, tsxReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// connect to wallet (credit)
+	amount, _ := tsx.Amount.Float64Value()
+	walletRequest := external.WalletRequest{
+		Reference: resp.Reference,
+		Amount:    amount.Float64,
+	}
+
+	walletResp, err := s.w.Credit(ctx, walletRequest, payload.Token)
+	if err != nil {
+		return nil, err
+	}
+
+	response := model.RefundResponse{
+		Reference:         walletRequest.Reference,
+		TransactionStatus: string(resp.TransactionStatus),
+		Amount:            walletRequest.Amount,
+		CreatedAt:         walletResp.CreatedAt,
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }

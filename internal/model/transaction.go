@@ -42,3 +42,32 @@ type TransactionResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 	Status    string    `json:"status"`
 }
+
+type GetTransaction struct {
+	UserID    int32
+	Reference string
+}
+
+type GetTransactions struct {
+	UserID int32
+	Limit  int32
+	Offset int32
+}
+
+type TransactionRefundPayload struct {
+	Reference      string `json:"reference" validate:"required"`
+	Description    string `json:"description"`
+	AdditionalInfo string `json:"additional_info"`
+	Token          string
+}
+
+func (u *TransactionRefundPayload) Validate() error {
+	return Validate.Struct(u)
+}
+
+type RefundResponse struct {
+	Reference         string    `json:"reference"`
+	TransactionStatus string    `json:"transaction_status"`
+	Amount            float64   `json:"amount"`
+	CreatedAt         time.Time `json:"created_at"`
+}
