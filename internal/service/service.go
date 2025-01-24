@@ -20,12 +20,12 @@ type Service struct {
 }
 
 func NewService(q *sqlc.Queries, db *pgxpool.Pool) Service {
-	w := external.NewWalletService()
+	external := external.NewExternal()
 	return Service{
 		Transaction: &TransactionService{
-			q:  q,
-			db: db,
-			w:  w,
+			q:        q,
+			db:       db,
+			external: external,
 		},
 	}
 }

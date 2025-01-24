@@ -26,11 +26,11 @@ type Handlers struct {
 
 func NewHandler(q *sqlc.Queries, db *pgxpool.Pool) Handlers {
 	service := service.NewService(q, db)
-	userManagement := external.NewUserManagement()
+	external := external.NewExternal()
 	return Handlers{
 		Health: &HealthHandler{},
 		Middleware: &MiddlewareHandler{
-			userManagement: userManagement,
+			external: external,
 		},
 		Transaction: &TransactionHandler{
 			service: service,

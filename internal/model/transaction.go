@@ -29,6 +29,7 @@ type TransactionUpdatePayload struct {
 	TransactionStatus string `json:"transaction_status" validate:"required"`
 	AdditionalInfo    string `json:"additional_info"`
 	Token             string
+	Email             string
 }
 
 func (u *TransactionUpdatePayload) Validate() error {

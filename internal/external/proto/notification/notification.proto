@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package notification;
+
+option go_package = "github.com/ArdiSasongko/EwalletProjects-notification/internal/proto/notification";
+
+service NotificationService {
+    rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+}
+
+message SendNotificationRequest {
+    string template_name = 1;
+    string recipient = 2;
+    map<string, string> placeholder = 3;
+}
+
+message SendNotificationResponse {
+    string message = 1;
+}

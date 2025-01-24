@@ -51,12 +51,14 @@ func (h *TransactionHandler) Create(ctx *fiber.Ctx) error {
 }
 
 func (h *TransactionHandler) Update(ctx *fiber.Ctx) error {
+	data := ctx.Locals("token").(model.TokenResponse)
 	payload := new(model.TransactionUpdatePayload)
 	token := ctx.Locals("valid").(string)
 
 	reference := ctx.Params("reference")
 	payload.Reference = reference
 	payload.Token = token
+	payload.Email = data.Email
 
 	if reference == "" {
 		errorValidate := fmt.Errorf("params not be empty")

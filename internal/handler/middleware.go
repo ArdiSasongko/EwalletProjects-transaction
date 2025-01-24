@@ -8,7 +8,7 @@ import (
 )
 
 type MiddlewareHandler struct {
-	userManagement external.UserManagement
+	external external.External
 }
 
 func (h *MiddlewareHandler) AuthMiddleware() fiber.Handler {
@@ -31,7 +31,7 @@ func (h *MiddlewareHandler) AuthMiddleware() fiber.Handler {
 
 		token := parts[1]
 
-		userID, err := h.userManagement.ValidateToken(rContext, token)
+		userID, err := h.external.Validation.ValidateToken(rContext, token)
 		if err != nil {
 			return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": err.Error(),

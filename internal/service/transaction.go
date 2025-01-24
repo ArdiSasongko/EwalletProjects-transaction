@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/ArdiSasongko/EwalletProjects-transaction/internal/external"
@@ -42,9 +43,9 @@ func generateReference(typeTrans string, userID int32) string {
 }
 
 type TransactionService struct {
-	db *pgxpool.Pool
-	q  *sqlc.Queries
-	w  external.Wallet
+	db       *pgxpool.Pool
+	q        *sqlc.Queries
+	external external.External
 }
 
 func roundToTwoDecimalPlaces(amount float64) float64 {
@@ -168,6 +169,36 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, payload *mod
 	}
 
 	if payload.TransactionStatus == StatusFailed {
+		switch {
+		case strings.Contains(payload.Reference, string(sqlc.TransactionTypeTOPUP)):
+			amount, _ := tsx.Amount.Float64Value()
+			if err := s.external.Notif.SendNotification(ctx, external.NotifRequest{
+				Recipient:    payload.Email,
+				TemplateName: "topup_failed",
+				Placeholder: map[string]string{
+					"user_id":    string(tsx.UserID),
+					"amount":     fmt.Sprintf("%.2f", amount.Float64),
+					"reference":  payload.Reference,
+					"created_at": tsx.CreatedAt.Time.Format("2006-01-02 15:04:05"),
+				},
+			}); err != nil {
+				return model.TransactionResponse{}, err
+			}
+		case strings.Contains(payload.Reference, string(sqlc.TransactionTypePURCHASE)):
+			amount, _ := tsx.Amount.Float64Value()
+			if err := s.external.Notif.SendNotification(ctx, external.NotifRequest{
+				Recipient:    payload.Email,
+				TemplateName: "purchase_failed",
+				Placeholder: map[string]string{
+					"user_id":    string(tsx.UserID),
+					"amount":     fmt.Sprintf("%.2f", amount.Float64),
+					"reference":  payload.Reference,
+					"created_at": tsx.CreatedAt.Time.Format("2006-01-02 15:04:05"),
+				},
+			}); err != nil {
+				return model.TransactionResponse{}, err
+			}
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return model.TransactionResponse{}, fmt.Errorf("failed to process transaction")
 		}
@@ -182,16 +213,18 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, payload *mod
 	updatePayload := external.WalletRequest{
 		Amount:    amountFloat.Float64,
 		Reference: tsx.Reference,
+		Status:    string(resp),
 	}
 
 	var respTrans model.TransactionResponse
+	log.Println(tsx.TransactionType)
 	switch tsx.TransactionType {
 	case sqlc.TransactionTypePURCHASE:
-		d, err := s.w.Debit(ctx, updatePayload, payload.Token)
+		d, err := s.external.Wallet.Debit(ctx, updatePayload, payload.Token)
 		if err != nil {
 			return model.TransactionResponse{}, fmt.Errorf("credit wallet error :%w", err)
 		}
-
+		log.Println()
 		respTrans = model.TransactionResponse{
 			WalletID:  d.UserID,
 			Reference: d.Reference,
@@ -200,7 +233,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, payload *mod
 		}
 
 	case sqlc.TransactionTypeTOPUP:
-		d, err := s.w.Credit(ctx, updatePayload, payload.Token)
+		d, err := s.external.Wallet.Credit(ctx, updatePayload, payload.Token)
 		if err != nil {
 			return model.TransactionResponse{}, fmt.Errorf("credit wallet error :%w", err)
 		}
@@ -312,7 +345,7 @@ func (s *TransactionService) CreateRefund(ctx context.Context, payload *model.Tr
 		Amount:    amount.Float64,
 	}
 
-	walletResp, err := s.w.Credit(ctx, walletRequest, payload.Token)
+	walletResp, err := s.external.Wallet.Credit(ctx, walletRequest, payload.Token)
 	if err != nil {
 		return nil, err
 	}

@@ -18,4 +18,5 @@ message TokenResponse {
 
 message UserData {
     int32 id = 1;
+    string email = 2;
 }

@@ -24,23 +24,11 @@ type WalletResponse struct {
 type WalletRequest struct {
 	Amount    float64 `json:"amount"`
 	Reference string  `json:"reference"`
-}
-
-type Wallet interface {
-	Credit(context.Context, WalletRequest, string) (*WalletResponse, error)
-	Debit(context.Context, WalletRequest, string) (*WalletResponse, error)
+	Status    string  `json:"status"`
 }
 
 type wallet struct {
 	httpClient *http.Client
-}
-
-func NewWalletService() Wallet {
-	return &wallet{
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
-	}
 }
 
 func (w *wallet) Credit(ctx context.Context, reqData WalletRequest, token string) (*WalletResponse, error) {
@@ -53,8 +41,10 @@ func (w *wallet) Credit(ctx context.Context, reqData WalletRequest, token string
 	payload := WalletRequest{
 		Amount:    reqData.Amount,
 		Reference: reqData.Reference,
+		Status:    reqData.Status,
 	}
 
+	log.Println(reqData.Status, reqData.Amount)
 	log.Println(url)
 
 	jsonData, err := json.Marshal(payload)
@@ -103,8 +93,10 @@ func (w *wallet) Debit(ctx context.Context, reqData WalletRequest, token string)
 	payload := WalletRequest{
 		Amount:    reqData.Amount,
 		Reference: reqData.Reference,
+		Status:    reqData.Status,
 	}
 
+	log.Println(reqData.Status, reqData.Amount)
 	//log.Println(url)
 
 	jsonData, err := json.Marshal(payload)

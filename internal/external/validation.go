@@ -9,17 +9,9 @@ import (
 	"google.golang.org/grpc"
 )
 
-type UserManagement interface {
-	ValidateToken(ctx context.Context, tokenReq string) (model.TokenResponse, error)
-}
+type Validation struct{}
 
-type userManagement struct{}
-
-func NewUserManagement() UserManagement {
-	return &userManagement{}
-}
-
-func (u *userManagement) ValidateToken(ctx context.Context, tokenReq string) (model.TokenResponse, error) {
+func (u *Validation) ValidateToken(ctx context.Context, tokenReq string) (model.TokenResponse, error) {
 	// connection to grpc
 	conn, err := grpc.Dial("localhost:5000", grpc.WithInsecure())
 	if err != nil {
@@ -44,5 +36,6 @@ func (u *userManagement) ValidateToken(ctx context.Context, tokenReq string) (mo
 
 	return model.TokenResponse{
 		UserID: response.Data.Id,
+		Email:  response.Data.Email,
 	}, nil
 }
